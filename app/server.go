@@ -58,6 +58,7 @@ func handleConnection(conn net.Conn, data_type_map map[string]int) {
 			conn.Write([]byte(response))	
 		}else {
 		conn.Write([]byte("+PONG\r\n"))
+		}
 	}
 }
 
