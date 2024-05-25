@@ -56,7 +56,7 @@ func handleConnection(conn net.Conn, data_type_map map[string]int) {
 			content := query[1].String
 			response := fmt.Sprintf("$%d\r\n%s\r\n", len(content), query[1].String)
 			conn.Write([]byte(response))	
-		}
+		}else {
 		conn.Write([]byte("+PONG\r\n"))
 	}
 }
