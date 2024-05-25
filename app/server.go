@@ -51,14 +51,15 @@ func handleConnection(conn net.Conn, data_type_map map[string]int) {
 		request := string(buf[:n])
 		if request == "*1\r\n$4\r\nPING\r\n" {
 			conn.Write([]byte("+PONG\r\n"))
-		}
-		result, _ := parseElement(request, data_type_map)
-		query := result.Array // e.g. ["ECHO", "hey"]
-		command := query[0]
-		if command.String == "ECHO" {
-			content := query[1].String
-			response := fmt.Sprintf("$%d\r\n%s\r\n", len(content), query[1].String)
-			conn.Write([]byte(response))	
+		}else{
+			result, _ := parseElement(request, data_type_map)
+			query := result.Array // e.g. ["ECHO", "hey"]
+			command := query[0]
+			if command.String == "ECHO" {
+				content := query[1].String
+				response := fmt.Sprintf("$%d\r\n%s\r\n", len(content), query[1].String)
+				conn.Write([]byte(response))	
+			}
 		}
 	}
 }
