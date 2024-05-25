@@ -49,7 +49,7 @@ func handleConnection(conn net.Conn, data_type_map map[string]int) {
 		buf := make([]byte, 1024)
 		n, _ := conn.Read(buf)
 		request := string(buf[:n])
-		if request == "+PING\r\n" {
+		if request == "*1\r\n$4\r\nPING\r\n" {
 			conn.Write([]byte("+PONG\r\n"))
 		}
 		result, _ := parseElement(request, data_type_map)
