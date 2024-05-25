@@ -11,6 +11,7 @@ import (
 const (
 	ARRAY = iota
 	STR
+	SIMPLE_STR
 )
 
 type ParsedElement struct {
@@ -23,6 +24,7 @@ func main() {
 	data_type_map := map[string]int{
 		"*": ARRAY,
 		"$": STR,
+		"+": SIMPLE_STR,
 	}
 
 	fmt.Println("Logs from your program will appear here!")
@@ -49,16 +51,18 @@ func handleConnection(conn net.Conn, data_type_map map[string]int) {
 		buf := make([]byte, 1024)
 		n, _ := conn.Read(buf)
 		request := string(buf[:n])
-		if request == "*1\r\n$4\r\nPING\r\n" {
-			conn.Write([]byte("+PONG\r\n"))
-		}else{
-			result, _ := parseElement(request, data_type_map)
+		result, _ := parseElement(request, data_type_map)
+
+		if result.Type == ARRAY {
 			query := result.Array // e.g. ["ECHO", "hey"]
 			command := query[0]
 			if command.String == "ECHO" {
 				content := query[1].String
 				response := fmt.Sprintf("$%d\r\n%s\r\n", len(content), query[1].String)
 				conn.Write([]byte(response))	
+			}
+			if command.String == "PING" {
+				conn.Write([]byte("+PONG\r\n"))
 			}
 		}
 	}
@@ -77,7 +81,14 @@ func parseElement(element string, data_type_map map[string]int) (ParsedElement, 
 	if op == STR {
 		return parseString(element, data_type_map)
 	}
+	if op == SIMPLE_STR {
+		return parseSimpleString(element, data_type_map)
+	}
 	return ParsedElement{}, -1
+}
+
+func parseSimpleString(element string, data_type_map map[string]int) (ParsedElement, int) {
+	return ParsedElement{String: strings.TrimRight(element[1:], "\r\n"), Type: SIMPLE_STR}, len(element)
 }
 
 func parseString(element string, data_type_map map[string]int) (ParsedElement, int) {
