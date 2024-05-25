@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -65,16 +66,32 @@ func handleConnection(conn net.Conn) {
 			query := result.Array // e.g. ["ECHO", "hey"]
 			command := query[0]
 			switch command.String{
+
 			case "ECHO":
 				content := query[1].String
 				response := fmt.Sprintf("$%d\r\n%s\r\n", len(content), query[1].String)
 				conn.Write([]byte(response))	
+
 			case "PING":
 				conn.Write([]byte("+PONG\r\n"))
+
 			case "SET":
 				key, value := query[1].String, query[2].String
+				if len(query) > 3 {  // >3 arguments mean there is something else than just key value
+					if strings.ToLower(query[3].String) == "px"{
+						expireKey := func() {
+							delete(KeyValueStore, key)
+						}
+						expireTime, err := strconv.Atoi(query[3].String)
+						if err != nil {
+							fmt.Println(err)
+						}
+						time.AfterFunc(time.Duration(expireTime) * time.Millisecond, expireKey)
+					}
+				}
 				KeyValueStore[key] = value
 				conn.Write([]byte("+OK\r\n"))
+
 			case "GET":
 				key := query[1].String
 				if value, ok := KeyValueStore[key]; ok {
