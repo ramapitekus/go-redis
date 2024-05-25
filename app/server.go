@@ -15,15 +15,17 @@ func main() {
 	}
 	defer listener.Close()
 
-	conn, err := listener.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
-	}
-	defer conn.Close()
-	for {
-		buf := make([]byte, 1024)
-		_, _ = conn.Read(buf)
-		conn.Write([]byte("+PONG\r\n"))
-	}
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
+		defer conn.Close()
+		for {
+			buf := make([]byte, 1024)
+			_, _ = conn.Read(buf)
+			conn.Write([]byte("+PONG\r\n"))
+		}
+	}()
 }
