@@ -82,7 +82,7 @@ func handleConnection(conn net.Conn) {
 						expireKey := func() {
 							delete(KeyValueStore, key)
 						}
-						expireTime, err := strconv.Atoi(query[3].String)
+						expireTime, err := strconv.Atoi(query[4].String)
 						if err != nil {
 							fmt.Println(err)
 						}
