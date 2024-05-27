@@ -28,6 +28,10 @@ var dataTypeMap = map[string]int{
 	"+": SIMPLE_STR,
 }
 
+var infoMap = map[string]string{
+	"replication": "$11\r\nrole:master\r\n",
+}
+
 var KeyValueStore = map[string]string{}
 var port = flag.String("port", "6379", "port to listen to.")
 
@@ -102,10 +106,19 @@ func handleConnection(conn net.Conn) {
 				} else {
 					conn.Write([]byte("$-1\r\n"))
 				}
+			case "INFO":
+				conn.Write([]byte(handleInfo(query[1])))
 			}
 
 		}
 	}
+}
+
+func handleInfo(request ParsedElement) string {
+	if strings.ToLower(request.String) == "replication" {
+		return "$11\r\nrole:master\r\n"
+	}
+	return "$11\r\nrole:master\r\n"
 }
 
 func parseElement(element string) (ParsedElement, int) {
