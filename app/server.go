@@ -22,125 +22,69 @@ type ParsedElement struct {
 	Type   int
 }
 
-var dataTypeMap = map[string]int{
-	"*": ARRAY,
-	"$": STR,
-	"+": SIMPLE_STR,
-}
+// var dataTypeMap = map[string]int{
+// 	"*": ARRAY,
+// 	"$": STR,
+// 	"+": SIMPLE_STR,
+// }
 
 var infoMap = map[string]string{
 	"replication": "$11\r\nrole:master\r\n",
 }
 
-var KeyValueStore = map[string]string{}
-var port = flag.String("port", "6379", "port to listen to.")
-var replication = flag.String("replicaof", "", "replica of")
+type CommandHandler func(conn net.Conn, command []ParsedElement) error
 
-func main() {
-	flag.Parse()
-	fmt.Println("Logs from your program will appear here!")
-	if *replication != "" {
-		// masterAddress := strings.Split(*replication, " ")
-		// masterIp, masterPort := masterAddress[0], masterAddress[1]
-		infoMap["replication"] = "$10\r\nrole:slave\r\n"
-	}
-
-	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *port))
-	if err != nil {
-		fmt.Println(fmt.Printf("Failed to bind to port %s", *port))
-		os.Exit(1)
-	}
-	defer listener.Close()
-
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Println("Error accepting connection: ", err.Error())
-			os.Exit(1)
-		}
-		go handleConnection(conn)
-	}
+func handleEcho(conn net.Conn, command []ParsedElement) error {
+	content := command[1].String
+	response := fmt.Sprintf("$%d\r\n%s\r\n", len(content), content)
+	conn.Write([]byte(response))
+	return nil
 }
 
-func handleConnection(conn net.Conn) {
-	defer conn.Close()
-	for {
-		buf := make([]byte, 1024)
-		n, err := conn.Read(buf)
-		if err != nil {
-			fmt.Println("Error reading from connection:", err)
-			return
-		}
+func handlePing(conn net.Conn, command []ParsedElement) error {
+	conn.Write([]byte("+PONG\r\n"))
+	return nil
+}
 
-		request := string(buf[:n])
-		result, _ := parseElement(request)
-
-		if result.Type == ARRAY {
-			query := result.Array // e.g. ["ECHO", "hey"]
-			command := query[0]
-			switch command.String {
-
-			case "ECHO":
-				content := query[1].String
-				response := fmt.Sprintf("$%d\r\n%s\r\n", len(content), query[1].String)
-				conn.Write([]byte(response))
-
-			case "PING":
-				conn.Write([]byte("+PONG\r\n"))
-
-			case "SET":
-				key, value := query[1].String, query[2].String
-				if len(query) > 3 { // >3 arguments mean there is something else than just key value
-					if strings.ToLower(query[3].String) == "px" {
-						expireKey := func() {
-							delete(KeyValueStore, key)
-						}
-						expireTime, err := strconv.Atoi(query[4].String)
-						if err != nil {
-							fmt.Println(err)
-						}
-						time.AfterFunc(time.Duration(expireTime)*time.Millisecond, expireKey)
-					}
-				}
-				KeyValueStore[key] = value
-				conn.Write([]byte("+OK\r\n"))
-
-			case "GET":
-				key := query[1].String
-				if value, ok := KeyValueStore[key]; ok {
-					conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)))
-				} else {
-					conn.Write([]byte("$-1\r\n"))
-				}
-			case "INFO":
-				conn.Write([]byte(handleInfo(query[1])))
+func handleSet(conn net.Conn, command []ParsedElement) error {
+	key, value := command[1].String, command[2].String
+	if len(command) > 3 { // >3 arguments mean there is something else than just key value
+		if strings.ToLower(command[3].String) == "px" {
+			expireKey := func() {
+				delete(KeyValueStore, key)
 			}
-
+			expireTime, err := strconv.Atoi(command[4].String)
+			if err != nil {
+				fmt.Println(err)
+			}
+			time.AfterFunc(time.Duration(expireTime)*time.Millisecond, expireKey)
 		}
 	}
+	KeyValueStore[key] = value
+	conn.Write([]byte("+OK\r\n"))
+	return nil
 }
 
-func handleInfo(request ParsedElement) string {
-	return infoMap["replication"]
-	// if strings.ToLower(request.String) == "replication" {
-	// 	return "$11\r\nrole:master\r\n"
-	// }
-	// return "$11\r\nrole:master\r\n"
+func handleInfo(conn net.Conn, command []ParsedElement) error {
+	conn.Write([]byte(infoMap["replication"]))
+	return nil
 }
+
+func handleGet(conn net.Conn, command []ParsedElement) error {
+	key := command[1].String
+	if value, ok := KeyValueStore[key]; ok {
+		conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)))
+	} else {
+		conn.Write([]byte("$-1\r\n"))
+	}
+	return nil
+}
+
+type Parser func(element string) (ParsedElement, int)
 
 func parseElement(element string) (ParsedElement, int) {
 	dataType := string(element[0])
-
-	op := dataTypeMap[dataType]
-	switch op {
-	case ARRAY:
-		return parseArray(element)
-	case STR:
-		return parseString(element)
-	case SIMPLE_STR:
-		return parseSimpleString(element)
-	}
-	return ParsedElement{}, -1
+	return parsers[dataType](element)
 }
 
 func parseSimpleString(element string) (ParsedElement, int) {
@@ -183,4 +127,73 @@ func parseArray(element string) (ParsedElement, int) {
 	}
 	return ParsedElement{Array: elementsArray, Type: ARRAY}, arrayLength + len(arrayLengthString) + 2 + 4 - 1 // 2 for types, 4 for \r\n, -1 length to fix index
 
+}
+
+var parsers map[string]Parser
+
+func initParsers() {
+	parsers = map[string]Parser{
+		"*": parseArray,
+		"$": parseString,
+		"+": parseSimpleString,
+	}
+}
+
+var commandHandlers = map[string]CommandHandler{
+	"ECHO": handleEcho,
+	"PING": handlePing,
+	"SET":  handleSet,
+	"GET":  handleGet,
+	"INFO": handleInfo,
+}
+
+var KeyValueStore = map[string]string{}
+var port = flag.String("port", "6379", "port to listen to.")
+var replication = flag.String("replicaof", "", "replica of")
+
+func main() {
+	initParsers()
+	flag.Parse()
+	if *replication != "" {
+		// masterAddress := strings.Split(*replication, " ")
+		// masterIp, masterPort := masterAddress[0], masterAddress[1]
+		infoMap["replication"] = "$10\r\nrole:slave\r\n"
+	}
+
+	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *port))
+	if err != nil {
+		fmt.Println(fmt.Printf("Failed to bind to port %s", *port))
+		os.Exit(1)
+	}
+	defer listener.Close()
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			os.Exit(1)
+		}
+		go handleConnection(conn)
+	}
+}
+
+func handleConnection(conn net.Conn) {
+	defer conn.Close()
+	for {
+		buf := make([]byte, 1024)
+		n, err := conn.Read(buf)
+		if err != nil {
+			fmt.Println("Error reading from connection:", err)
+			return
+		}
+
+		request := string(buf[:n])
+		result, _ := parseElement(request)
+
+		if result.Type == ARRAY {
+			query := result.Array // e.g. ["ECHO", "hey"]
+			command := query[0]
+			commandHandlers[command.String](conn, query)
+		}
+	}
 }
