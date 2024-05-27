@@ -151,12 +151,47 @@ var KeyValueStore = map[string]string{}
 var port = flag.String("port", "6379", "port to listen to.")
 var replication = flag.String("replicaof", "", "replica of")
 
-func connectToMaster(masterIp string, masterPort string){
+func setupReplica(){
+	masterAddress := strings.Split(*replication, " ")
+	masterIp, masterPort := masterAddress[0], masterAddress[1]
+	infoMap["replication"] = "$10\r\nrole:slave\r\n"
+
 	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", masterIp, masterPort))
 	if err != nil {
 		println("Could not connect to master")
+		os.Exit(1)
 	}
 	conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		println("Did not receive Pong from master.")
+		os.Exit(1)
+	}
+	if string(buf[:n]) == "+PONG\r\n" {
+		conn.Write([]byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n%s\r\n", *port)))
+	}else {
+		println("Master did not respond")
+		os.Exit(1)
+	}
+
+	buf = make([]byte, 1024)
+	n, err = conn.Read(buf)
+	if err != nil {
+		println("Did not receive OK from master.")
+		os.Exit(1)
+	}
+
+	if string(buf[:n]) == "+OK\r\n" {
+		conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"))
+	}
+
+	buf = make([]byte, 1024)
+	_, err = conn.Read(buf)
+	if err != nil {
+		println("Did not receive OK from master.")
+		os.Exit(1)
+	}
 }
 
 
@@ -164,10 +199,7 @@ func main() {
 	initParsers()
 	flag.Parse()
 	if *replication != "" {
-		masterAddress := strings.Split(*replication, " ")
-		masterIp, masterPort := masterAddress[0], masterAddress[1]
-		connectToMaster(masterIp, masterPort)
-		infoMap["replication"] = "$10\r\nrole:slave\r\n"
+		go setupReplica()
 	}
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *port))
