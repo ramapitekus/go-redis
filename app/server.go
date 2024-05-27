@@ -151,12 +151,22 @@ var KeyValueStore = map[string]string{}
 var port = flag.String("port", "6379", "port to listen to.")
 var replication = flag.String("replicaof", "", "replica of")
 
+func connectToMaster(masterIp string, masterPort string){
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", masterIp, masterPort))
+	if err != nil {
+		println("Could not connect to master")
+	}
+	conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
+}
+
+
 func main() {
 	initParsers()
 	flag.Parse()
 	if *replication != "" {
-		// masterAddress := strings.Split(*replication, " ")
-		// masterIp, masterPort := masterAddress[0], masterAddress[1]
+		masterAddress := strings.Split(*replication, " ")
+		masterIp, masterPort := masterAddress[0], masterAddress[1]
+		connectToMaster(masterIp, masterPort)
 		infoMap["replication"] = "$10\r\nrole:slave\r\n"
 	}
 
