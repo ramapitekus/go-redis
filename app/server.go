@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -29,7 +31,7 @@ type ParsedElement struct {
 // }
 
 var infoMap = map[string]string{
-	"replication": "$11\r\nrole:master\r\n",
+	"replication": "$89\r\nrole:master\r\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\r\nmaster_repl_offset:0\r\n",
 }
 
 type CommandHandler func(conn net.Conn, command []ParsedElement) error
@@ -152,6 +154,7 @@ var port = flag.String("port", "6379", "port to listen to.")
 var replication = flag.String("replicaof", "", "replica of")
 
 func main() {
+	new := uuid.New()
 	initParsers()
 	flag.Parse()
 	if *replication != "" {
