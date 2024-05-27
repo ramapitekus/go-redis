@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -28,13 +29,15 @@ var dataTypeMap = map[string]int{
 }
 
 var KeyValueStore = map[string]string{}
+var port = flag.String("port", "6379", "port to listen to.")
 
 func main() {
-
+	flag.Parse()
 	fmt.Println("Logs from your program will appear here!")
-	listener, err := net.Listen("tcp", "0.0.0.0:6379")
+
+	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *port))
 	if err != nil {
-		fmt.Println("Failed to bind to port 6379")
+		fmt.Println(fmt.Printf("Failed to bind to port %s", *port))
 		os.Exit(1)
 	}
 	defer listener.Close()
@@ -48,7 +51,7 @@ func main() {
 		go handleConnection(conn)
 	}
 }
-	
+
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	for {
@@ -65,20 +68,20 @@ func handleConnection(conn net.Conn) {
 		if result.Type == ARRAY {
 			query := result.Array // e.g. ["ECHO", "hey"]
 			command := query[0]
-			switch command.String{
+			switch command.String {
 
 			case "ECHO":
 				content := query[1].String
 				response := fmt.Sprintf("$%d\r\n%s\r\n", len(content), query[1].String)
-				conn.Write([]byte(response))	
+				conn.Write([]byte(response))
 
 			case "PING":
 				conn.Write([]byte("+PONG\r\n"))
 
 			case "SET":
 				key, value := query[1].String, query[2].String
-				if len(query) > 3 {  // >3 arguments mean there is something else than just key value
-					if strings.ToLower(query[3].String) == "px"{
+				if len(query) > 3 { // >3 arguments mean there is something else than just key value
+					if strings.ToLower(query[3].String) == "px" {
 						expireKey := func() {
 							delete(KeyValueStore, key)
 						}
@@ -86,7 +89,7 @@ func handleConnection(conn net.Conn) {
 						if err != nil {
 							fmt.Println(err)
 						}
-						time.AfterFunc(time.Duration(expireTime) * time.Millisecond, expireKey)
+						time.AfterFunc(time.Duration(expireTime)*time.Millisecond, expireKey)
 					}
 				}
 				KeyValueStore[key] = value
@@ -100,15 +103,14 @@ func handleConnection(conn net.Conn) {
 					conn.Write([]byte("$-1\r\n"))
 				}
 			}
-			
+
 		}
 	}
 }
 
-
 func parseElement(element string) (ParsedElement, int) {
 	dataType := string(element[0])
-	
+
 	op := dataTypeMap[dataType]
 	switch op {
 	case ARRAY:
@@ -135,12 +137,12 @@ func parseString(element string) (ParsedElement, int) {
 		os.Exit(1)
 	}
 	return ParsedElement{String: body[:length], Type: STR}, length + len(lengthString) + 2 + 4 - 1 // 2 for types, 4 for \r\n, -1 length to fix index
-	
+
 }
 
 func parseArray(element string) (ParsedElement, int) {
 	splitElement := strings.SplitN(element, "\r\n", 2)
-	arrayLengthString, body := splitElement[0][1:], splitElement[1]  // 0[:1] - all except the first special sign
+	arrayLengthString, body := splitElement[0][1:], splitElement[1] // 0[:1] - all except the first special sign
 	arrayLength, err := strconv.Atoi(arrayLengthString)
 	if err != nil {
 		fmt.Println("Failed to parse ARRAY Data type - could not convert length of the array to int.")
@@ -160,5 +162,5 @@ func parseArray(element string) (ParsedElement, int) {
 		endIndexCum += endIndex
 	}
 	return ParsedElement{Array: elementsArray, Type: ARRAY}, arrayLength + len(arrayLengthString) + 2 + 4 - 1 // 2 for types, 4 for \r\n, -1 length to fix index
-	
+
 }
