@@ -34,10 +34,16 @@ var infoMap = map[string]string{
 
 var KeyValueStore = map[string]string{}
 var port = flag.String("port", "6379", "port to listen to.")
+var replication = flag.String("replicaof", "", "replica of")
 
 func main() {
 	flag.Parse()
 	fmt.Println("Logs from your program will appear here!")
+	if *replication != "" {
+		// masterAddress := strings.Split(*replication, " ")
+		// masterIp, masterPort := masterAddress[0], masterAddress[1]
+		infoMap["replication"] = "$10\r\nrole:slave\r\n"
+	}
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *port))
 	if err != nil {
