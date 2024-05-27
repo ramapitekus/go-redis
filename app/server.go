@@ -74,10 +74,24 @@ func handleGet(conn net.Conn, command []ParsedElement) error {
 	key := command[1].String
 	if value, ok := KeyValueStore[key]; ok {
 		conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)))
-	} else {
-		conn.Write([]byte("$-1\r\n"))
+		} else {
+			conn.Write([]byte("$-1\r\n"))
+		}
+		return nil
 	}
+
+func handleReplconf(conn net.Conn, command []ParsedElement) error {
+	conn.Write([]byte("+OK\r\n"))
 	return nil
+}
+	
+var commandHandlers = map[string]CommandHandler{
+	"ECHO": handleEcho,
+	"PING": handlePing,
+	"SET":  handleSet,
+	"GET":  handleGet,
+	"INFO": handleInfo,
+	"REPLCONF": handleReplconf,
 }
 
 type Parser func(element string) (ParsedElement, int)
@@ -139,13 +153,6 @@ func initParsers() {
 	}
 }
 
-var commandHandlers = map[string]CommandHandler{
-	"ECHO": handleEcho,
-	"PING": handlePing,
-	"SET":  handleSet,
-	"GET":  handleGet,
-	"INFO": handleInfo,
-}
 
 var KeyValueStore = map[string]string{}
 var port = flag.String("port", "6379", "port to listen to.")
