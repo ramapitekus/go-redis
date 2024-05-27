@@ -192,6 +192,15 @@ func setupReplica(){
 		println("Did not receive OK from master.")
 		os.Exit(1)
 	}
+
+	
+	conn.Write([]byte("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"))
+	buf = make([]byte, 1024)
+	_, err = conn.Read(buf)
+	if err != nil {
+		println("Did not receive FULLRESYNC from master.")
+		os.Exit(1)
+	}
 }
 
 
