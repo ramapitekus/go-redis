@@ -121,10 +121,11 @@ func handleConnection(conn net.Conn) {
 }
 
 func handleInfo(request ParsedElement) string {
-	if strings.ToLower(request.String) == "replication" {
-		return "$11\r\nrole:master\r\n"
-	}
-	return "$11\r\nrole:master\r\n"
+	return infoMap["replication"]
+	// if strings.ToLower(request.String) == "replication" {
+	// 	return "$11\r\nrole:master\r\n"
+	// }
+	// return "$11\r\nrole:master\r\n"
 }
 
 func parseElement(element string) (ParsedElement, int) {
