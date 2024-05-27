@@ -105,8 +105,9 @@ func handlePsync(conn net.Conn, command []RedisElement) error {
 	if err != nil {
 		panic("Replica did not accept")
 	}
-	payload := RedisElement{String: "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==", Type: STR}.ToString()
-	conn.Write([]byte(strings.TrimRight(payload, "\r\n")))
+	// payload := RedisElement{String: "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==", Type: STR}.ToString()
+	conn.Write([]byte(fmt.Sprint("$", len("UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog=="), "\r\n")))
+	conn.Write([]byte("UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog=="))
 	return nil
 }
 	
