@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 const (
@@ -154,7 +152,6 @@ var port = flag.String("port", "6379", "port to listen to.")
 var replication = flag.String("replicaof", "", "replica of")
 
 func main() {
-	new := uuid.New()
 	initParsers()
 	flag.Parse()
 	if *replication != "" {
