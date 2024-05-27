@@ -22,14 +22,10 @@ type ParsedElement struct {
 	Type   int
 }
 
-// var dataTypeMap = map[string]int{
-// 	"*": ARRAY,
-// 	"$": STR,
-// 	"+": SIMPLE_STR,
-// }
+const replicationId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
 
 var infoMap = map[string]string{
-	"replication": "$89\r\nrole:master\r\nmaster_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb\r\nmaster_repl_offset:0\r\n",
+	"replication": fmt.Sprintf("$89\r\nrole:master\r\nmaster_replid:%s\r\nmaster_repl_offset:0\r\n", replicationId),
 }
 
 type CommandHandler func(conn net.Conn, command []ParsedElement) error
@@ -84,6 +80,11 @@ func handleReplconf(conn net.Conn, command []ParsedElement) error {
 	conn.Write([]byte("+OK\r\n"))
 	return nil
 }
+
+func handlePsync(conn net.Conn, command []ParsedElement) error {
+	conn.Write([]byte(fmt.Sprintf("+FULLRESYNC %s 0\r\n", replicationId)))
+	return nil
+}
 	
 var commandHandlers = map[string]CommandHandler{
 	"ECHO": handleEcho,
@@ -92,6 +93,7 @@ var commandHandlers = map[string]CommandHandler{
 	"GET":  handleGet,
 	"INFO": handleInfo,
 	"REPLCONF": handleReplconf,
+	"PSYNC": handlePsync,
 }
 
 type Parser func(element string) (ParsedElement, int)
