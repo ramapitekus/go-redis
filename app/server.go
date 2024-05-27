@@ -16,6 +16,13 @@ const (
 	SIMPLE_STR
 )
 
+const replicationId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
+const NOT_FOUND = "$-1\r\n"
+
+var infoMap = map[string]string{
+	"replication": fmt.Sprintf("$89\r\nrole:master\r\nmaster_replid:%s\r\nmaster_repl_offset:0\r\n", replicationId),
+}
+
 type RedisElement struct {
 	Array  []RedisElement
 	String string
@@ -38,13 +45,6 @@ func (element RedisElement) ToString() string {
 	} else {
 		panic(fmt.Sprintf("Unimplemented type %d", element.Type))
 	}
-}
-
-const replicationId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
-const NOT_FOUND = "$-1\r\n"
-
-var infoMap = map[string]string{
-	"replication": fmt.Sprintf("$89\r\nrole:master\r\nmaster_replid:%s\r\nmaster_repl_offset:0\r\n", replicationId),
 }
 
 type CommandHandler func(conn net.Conn, command []RedisElement) error
@@ -101,7 +101,12 @@ func handleReplconf(conn net.Conn, command []RedisElement) error {
 
 func handlePsync(conn net.Conn, command []RedisElement) error {
 	response := RedisElement{String: fmt.Sprintf("FULLRESYNC %s 0", replicationId), Type: SIMPLE_STR}.ToString()
-	conn.Write([]byte(response))
+	_, err := conn.Write([]byte(response))
+	if err != nil {
+		panic("Replica did not accept")
+	}
+	payload := RedisElement{String: "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog==", Type: STR}.ToString()
+	conn.Write([]byte(strings.TrimRight(payload, "\r\n")))
 	return nil
 }
 	
