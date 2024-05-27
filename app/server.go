@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"net"
@@ -105,11 +106,12 @@ func handlePsync(conn net.Conn, command []RedisElement) error {
 	if err != nil {
 		panic("Replica did not accept")
 	}
-	_, err = conn.Write([]byte(fmt.Sprint("$", len("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"), "\r\n")))
+	payload, _ := hex.DecodeString("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2")
+	_, err = conn.Write([]byte(fmt.Sprint("$", len(payload), "\r\n")))
 	if err != nil {
-		panic("fucker")
+		panic("Panicked -_-")
 	}
-	conn.Write([]byte("524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"))
+	conn.Write([]byte(payload))
 	return nil
 }
 	
