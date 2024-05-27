@@ -16,33 +16,51 @@ const (
 	SIMPLE_STR
 )
 
-type ParsedElement struct {
-	Array  []ParsedElement
+type RedisElement struct {
+	Array  []RedisElement
 	String string
 	Type   int
 }
 
+func (element RedisElement) ToString() string {
+	if element.Type == STR {
+		return fmt.Sprintf("$%d\r\n%s\r\n", len(element.String), element.String)
+	}
+	if element.Type == ARRAY {
+		encodedString := fmt.Sprintf("*%d\r\n", len(element.Array))
+		for _, embeddedElement := range element.Array {
+			encodedString += embeddedElement.ToString()
+		}
+		return encodedString
+	} 
+	if element.Type == SIMPLE_STR {
+		return fmt.Sprintf("+%s\r\n", element.String)
+	} else {
+		panic(fmt.Sprintf("Unimplemented type %d", element.Type))
+	}
+}
+
 const replicationId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
+const NOT_FOUND = "$-1\r\n"
 
 var infoMap = map[string]string{
 	"replication": fmt.Sprintf("$89\r\nrole:master\r\nmaster_replid:%s\r\nmaster_repl_offset:0\r\n", replicationId),
 }
 
-type CommandHandler func(conn net.Conn, command []ParsedElement) error
+type CommandHandler func(conn net.Conn, command []RedisElement) error
 
-func handleEcho(conn net.Conn, command []ParsedElement) error {
+func handleEcho(conn net.Conn, command []RedisElement) error {
 	content := command[1].String
-	response := fmt.Sprintf("$%d\r\n%s\r\n", len(content), content)
-	conn.Write([]byte(response))
+	conn.Write([]byte(RedisElement{String: content, Type: STR}.ToString()))
 	return nil
 }
 
-func handlePing(conn net.Conn, command []ParsedElement) error {
-	conn.Write([]byte("+PONG\r\n"))
+func handlePing(conn net.Conn, command []RedisElement) error {
+	conn.Write([]byte(RedisElement{String: "PONG", Type: SIMPLE_STR}.ToString()))
 	return nil
 }
 
-func handleSet(conn net.Conn, command []ParsedElement) error {
+func handleSet(conn net.Conn, command []RedisElement) error {
 	key, value := command[1].String, command[2].String
 	if len(command) > 3 { // >3 arguments mean there is something else than just key value
 		if strings.ToLower(command[3].String) == "px" {
@@ -57,32 +75,33 @@ func handleSet(conn net.Conn, command []ParsedElement) error {
 		}
 	}
 	KeyValueStore[key] = value
-	conn.Write([]byte("+OK\r\n"))
+	conn.Write([]byte(RedisElement{String: "OK", Type: SIMPLE_STR}.ToString()))
 	return nil
 }
 
-func handleInfo(conn net.Conn, command []ParsedElement) error {
+func handleInfo(conn net.Conn, command []RedisElement) error {
 	conn.Write([]byte(infoMap["replication"]))
 	return nil
 }
 
-func handleGet(conn net.Conn, command []ParsedElement) error {
+func handleGet(conn net.Conn, command []RedisElement) error {
 	key := command[1].String
 	if value, ok := KeyValueStore[key]; ok {
-		conn.Write([]byte(fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)))
+		conn.Write([]byte(RedisElement{String: value, Type: STR}.ToString()))
 		} else {
-			conn.Write([]byte("$-1\r\n"))
+			conn.Write([]byte(NOT_FOUND))
 		}
 		return nil
 	}
 
-func handleReplconf(conn net.Conn, command []ParsedElement) error {
-	conn.Write([]byte("+OK\r\n"))
+func handleReplconf(conn net.Conn, command []RedisElement) error {
+	conn.Write([]byte(RedisElement{String: "OK", Type: SIMPLE_STR}.ToString()))
 	return nil
 }
 
-func handlePsync(conn net.Conn, command []ParsedElement) error {
-	conn.Write([]byte(fmt.Sprintf("+FULLRESYNC %s 0\r\n", replicationId)))
+func handlePsync(conn net.Conn, command []RedisElement) error {
+	response := RedisElement{String: fmt.Sprintf("FULLRESYNC %s 0", replicationId), Type: SIMPLE_STR}.ToString()
+	conn.Write([]byte(response))
 	return nil
 }
 	
@@ -96,18 +115,18 @@ var commandHandlers = map[string]CommandHandler{
 	"PSYNC": handlePsync,
 }
 
-type Parser func(element string) (ParsedElement, int)
+type Parser func(element string) (RedisElement, int)
 
-func parseElement(element string) (ParsedElement, int) {
+func parseElement(element string) (RedisElement, int) {
 	dataType := string(element[0])
 	return parsers[dataType](element)
 }
 
-func parseSimpleString(element string) (ParsedElement, int) {
-	return ParsedElement{String: strings.TrimRight(element[1:], "\r\n"), Type: SIMPLE_STR}, len(element)
+func parseSimpleString(element string) (RedisElement, int) {
+	return RedisElement{String: strings.TrimRight(element[1:], "\r\n"), Type: SIMPLE_STR}, len(element)
 }
 
-func parseString(element string) (ParsedElement, int) {
+func parseString(element string) (RedisElement, int) {
 	splitElement := strings.SplitN(element, "\r\n", 2)
 	lengthString, body := splitElement[0][1:], splitElement[1]
 
@@ -116,11 +135,11 @@ func parseString(element string) (ParsedElement, int) {
 		fmt.Println("Failed to parse STR Data type - could not convert length of the array to int.")
 		os.Exit(1)
 	}
-	return ParsedElement{String: body[:length], Type: STR}, length + len(lengthString) + 2 + 4 - 1 // 2 for types, 4 for \r\n, -1 length to fix index
+	return RedisElement{String: body[:length], Type: STR}, length + len(lengthString) + 2 + 4 - 1 // 2 for types, 4 for \r\n, -1 length to fix index
 
 }
 
-func parseArray(element string) (ParsedElement, int) {
+func parseArray(element string) (RedisElement, int) {
 	splitElement := strings.SplitN(element, "\r\n", 2)
 	arrayLengthString, body := splitElement[0][1:], splitElement[1] // 0[:1] - all except the first special sign
 	arrayLength, err := strconv.Atoi(arrayLengthString)
@@ -129,9 +148,9 @@ func parseArray(element string) (ParsedElement, int) {
 		os.Exit(1)
 	}
 
-	elementsArray := make([]ParsedElement, arrayLength)
+	elementsArray := make([]RedisElement, arrayLength)
 	endIndexCum := 0
-	var parsedValue ParsedElement
+	var parsedValue RedisElement
 	var endIndex int
 	for elementIndex := 0; elementIndex < arrayLength; elementIndex++ {
 		parsedValue, endIndex = parseElement(body[endIndexCum:])
@@ -141,7 +160,7 @@ func parseArray(element string) (ParsedElement, int) {
 		elementsArray[elementIndex] = parsedValue
 		endIndexCum += endIndex
 	}
-	return ParsedElement{Array: elementsArray, Type: ARRAY}, arrayLength + len(arrayLengthString) + 2 + 4 - 1 // 2 for types, 4 for \r\n, -1 length to fix index
+	return RedisElement{Array: elementsArray, Type: ARRAY}, arrayLength + len(arrayLengthString) + 2 + 4 - 1 // 2 for types, 4 for \r\n, -1 length to fix index
 
 }
 
@@ -163,7 +182,7 @@ var replication = flag.String("replicaof", "", "replica of")
 func setupReplica(){
 	masterAddress := strings.Split(*replication, " ")
 	masterIp, masterPort := masterAddress[0], masterAddress[1]
-	infoMap["replication"] = "$10\r\nrole:slave\r\n"
+	infoMap["replication"] = RedisElement{String: "role:slave", Type: STR}.ToString()
 
 	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", masterIp, masterPort))
 	if err != nil {
