@@ -24,6 +24,8 @@ var infoMap = map[string]string{
 	"replication": fmt.Sprintf("$89\r\nrole:master\r\nmaster_replid:%s\r\nmaster_repl_offset:0\r\n", replicationId),
 }
 
+var replicaConns = []net.Conn{}
+
 type RedisElement struct {
 	Array  []RedisElement
 	String string
@@ -40,7 +42,7 @@ func (element RedisElement) ToString() string {
 			encodedString += embeddedElement.ToString()
 		}
 		return encodedString
-	} 
+	}
 	if element.Type == SIMPLE_STR {
 		return fmt.Sprintf("+%s\r\n", element.String)
 	} else {
@@ -76,6 +78,11 @@ func handleSet(conn net.Conn, command []RedisElement) error {
 		}
 	}
 	KeyValueStore[key] = value
+
+	for _, conn := range replicaConns {
+		conn.Write([]byte(RedisElement{Type: ARRAY, Array: command}.ToString()))
+	}
+
 	conn.Write([]byte(RedisElement{String: "OK", Type: SIMPLE_STR}.ToString()))
 	return nil
 }
@@ -89,13 +96,14 @@ func handleGet(conn net.Conn, command []RedisElement) error {
 	key := command[1].String
 	if value, ok := KeyValueStore[key]; ok {
 		conn.Write([]byte(RedisElement{String: value, Type: STR}.ToString()))
-		} else {
-			conn.Write([]byte(NOT_FOUND))
-		}
-		return nil
+	} else {
+		conn.Write([]byte(NOT_FOUND))
 	}
+	return nil
+}
 
-func handleReplconf(conn net.Conn, command []RedisElement) error {
+func handleReplconf(conn net.Conn, replConf []RedisElement) error {
+	replicaConns = append(replicaConns, conn)
 	conn.Write([]byte(RedisElement{String: "OK", Type: SIMPLE_STR}.ToString()))
 	return nil
 }
@@ -114,15 +122,15 @@ func handlePsync(conn net.Conn, command []RedisElement) error {
 	conn.Write([]byte(payload))
 	return nil
 }
-	
+
 var commandHandlers = map[string]CommandHandler{
-	"ECHO": handleEcho,
-	"PING": handlePing,
-	"SET":  handleSet,
-	"GET":  handleGet,
-	"INFO": handleInfo,
+	"ECHO":     handleEcho,
+	"PING":     handlePing,
+	"SET":      handleSet,
+	"GET":      handleGet,
+	"INFO":     handleInfo,
 	"REPLCONF": handleReplconf,
-	"PSYNC": handlePsync,
+	"PSYNC":    handlePsync,
 }
 
 type Parser func(element string) (RedisElement, int)
@@ -184,12 +192,11 @@ func initParsers() {
 	}
 }
 
-
 var KeyValueStore = map[string]string{}
 var port = flag.String("port", "6379", "port to listen to.")
 var replication = flag.String("replicaof", "", "replica of")
 
-func setupReplica(){
+func setupReplica() {
 	masterAddress := strings.Split(*replication, " ")
 	masterIp, masterPort := masterAddress[0], masterAddress[1]
 	infoMap["replication"] = RedisElement{String: "role:slave", Type: STR}.ToString()
@@ -208,7 +215,7 @@ func setupReplica(){
 	}
 	if string(buf[:n]) == "+PONG\r\n" {
 		conn.Write([]byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n%s\r\n", *port)))
-	}else {
+	} else {
 		println("Master did not respond")
 		os.Exit(1)
 	}
@@ -231,7 +238,6 @@ func setupReplica(){
 		os.Exit(1)
 	}
 
-	
 	conn.Write([]byte("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"))
 	buf = make([]byte, 1024)
 	_, err = conn.Read(buf)
@@ -240,7 +246,6 @@ func setupReplica(){
 		os.Exit(1)
 	}
 }
-
 
 func main() {
 	initParsers()
