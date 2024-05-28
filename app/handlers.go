@@ -48,13 +48,13 @@ func handleSet(conn net.Conn, command []RedisElement) error {
 	}
 	KeyValueStore[key] = value
 
-	for replicaConn, _ := range replicaConns {
-		replicaConn.Write([]byte(RedisElement{Type: ARRAY, Array: command}.ToString()))
-	}
-
-	if GetServerInfo().Master{ // only sends OK if master since slaves should not send acks
+	if GetServerInfo().Master {
+		for replicaConn, _ := range replicaConns {
+			replicaConn.Write([]byte(RedisElement{Type: ARRAY, Array: command}.ToString()))
+		}
 		conn.Write([]byte(RedisElement{String: "OK", Type: SIMPLE_STR}.ToString()))
 	}
+
 	return nil
 }
 
