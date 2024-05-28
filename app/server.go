@@ -277,7 +277,7 @@ func handleConnection(conn net.Conn) {
 		if result.Type == ARRAY {
 			query := result.Array // e.g. ["ECHO", "hey"]
 			command := query[0]
-			commandHandlers[command.String](conn, query)
+			CommandHandlers[command.String](conn, query)
 		}
 	}
 }
