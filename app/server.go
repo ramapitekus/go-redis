@@ -79,8 +79,8 @@ func handleSet(conn net.Conn, command []RedisElement) error {
 	}
 	KeyValueStore[key] = value
 
-	for _, conn := range replicaConns {
-		conn.Write([]byte(RedisElement{Type: ARRAY, Array: command}.ToString()))
+	for _, replicaConn := range replicaConns {
+		replicaConn.Write([]byte(RedisElement{Type: ARRAY, Array: command}.ToString()))
 	}
 
 	conn.Write([]byte(RedisElement{String: "OK", Type: SIMPLE_STR}.ToString()))
