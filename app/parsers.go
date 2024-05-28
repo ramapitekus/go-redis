@@ -45,7 +45,7 @@ func ParseArray(element string) (RedisElement, int) {
 	var parsedValue RedisElement
 	var endIndex int
 	for elementIndex := 0; elementIndex < arrayLength; elementIndex++ {
-		parsedValue, endIndex = parseElement(body[endIndexCum:])
+		parsedValue, endIndex = ParseElement(body[endIndexCum:])
 		if err != nil {
 			os.Exit(1)
 		}
@@ -60,8 +60,8 @@ var parsers map[string]Parser
 
 func InitParsers() {
 	parsers = map[string]Parser{
-		"*": parseArray,
-		"$": parseString,
-		"+": parseSimpleString,
+		"*": ParseArray,
+		"$": ParseString,
+		"+": ParseSimpleString,
 	}
 }
