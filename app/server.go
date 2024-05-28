@@ -24,7 +24,7 @@ var infoMap = map[string]string{
 	"replication": fmt.Sprintf("$89\r\nrole:master\r\nmaster_replid:%s\r\nmaster_repl_offset:0\r\n", replicationId),
 }
 
-var replicaConns = []net.Conn{}
+var replicaConns = map[net.Conn]bool{}
 
 type RedisElement struct {
 	Array  []RedisElement
@@ -79,7 +79,7 @@ func handleSet(conn net.Conn, command []RedisElement) error {
 	}
 	KeyValueStore[key] = value
 
-	for _, replicaConn := range replicaConns {
+	for replicaConn, _ := range replicaConns {
 		replicaConn.Write([]byte(RedisElement{Type: ARRAY, Array: command}.ToString()))
 	}
 
@@ -103,7 +103,9 @@ func handleGet(conn net.Conn, command []RedisElement) error {
 }
 
 func handleReplconf(conn net.Conn, replConf []RedisElement) error {
-	replicaConns = append(replicaConns, conn)
+	if _, exists := replicaConns[conn]; !exists {
+		replicaConns[conn] = true
+	}
 	conn.Write([]byte(RedisElement{String: "OK", Type: SIMPLE_STR}.ToString()))
 	return nil
 }
