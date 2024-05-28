@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -123,125 +121,15 @@ func (element RedisElement) ToString() string {
 // 	return nil
 // }
 
-type Parser func(element string) (RedisElement, int)
-
-func parseElement(element string) (RedisElement, int) {
-	dataType := string(element[0])
-	return parsers[dataType](element)
-}
-
-func parseSimpleString(element string) (RedisElement, int) {
-	return RedisElement{String: strings.TrimRight(element[1:], "\r\n"), Type: SIMPLE_STR}, len(element)
-}
-
-func parseString(element string) (RedisElement, int) {
-	splitElement := strings.SplitN(element, "\r\n", 2)
-	lengthString, body := splitElement[0][1:], splitElement[1]
-
-	length, err := strconv.Atoi(lengthString)
-	if err != nil {
-		fmt.Println("Failed to parse STR Data type - could not convert length of the array to int.")
-		os.Exit(1)
-	}
-	return RedisElement{String: body[:length], Type: STR}, length + len(lengthString) + 2 + 4 - 1 // 2 for types, 4 for \r\n, -1 length to fix index
-
-}
-
-func parseArray(element string) (RedisElement, int) {
-	splitElement := strings.SplitN(element, "\r\n", 2)
-	arrayLengthString, body := splitElement[0][1:], splitElement[1] // 0[:1] - all except the first special sign
-	arrayLength, err := strconv.Atoi(arrayLengthString)
-	if err != nil {
-		fmt.Println("Failed to parse ARRAY Data type - could not convert length of the array to int.")
-		os.Exit(1)
-	}
-
-	elementsArray := make([]RedisElement, arrayLength)
-	endIndexCum := 0
-	var parsedValue RedisElement
-	var endIndex int
-	for elementIndex := 0; elementIndex < arrayLength; elementIndex++ {
-		parsedValue, endIndex = parseElement(body[endIndexCum:])
-		if err != nil {
-			os.Exit(1)
-		}
-		elementsArray[elementIndex] = parsedValue
-		endIndexCum += endIndex
-	}
-	return RedisElement{Array: elementsArray, Type: ARRAY}, arrayLength + len(arrayLengthString) + 2 + 4 - 1 // 2 for types, 4 for \r\n, -1 length to fix index
-
-}
-
-var parsers map[string]Parser
-
-func initParsers() {
-	parsers = map[string]Parser{
-		"*": parseArray,
-		"$": parseString,
-		"+": parseSimpleString,
-	}
-}
-
 var KeyValueStore = map[string]string{}
 var port = flag.String("port", "6379", "port to listen to.")
 var replication = flag.String("replicaof", "", "replica of")
 
-func setupReplica() {
-	masterAddress := strings.Split(*replication, " ")
-	masterIp, masterPort := masterAddress[0], masterAddress[1]
-	infoMap["replication"] = RedisElement{String: "role:slave", Type: STR}.ToString()
-
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", masterIp, masterPort))
-	if err != nil {
-		println("Could not connect to master")
-		os.Exit(1)
-	}
-	conn.Write([]byte("*1\r\n$4\r\nPING\r\n"))
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
-	if err != nil {
-		println("Did not receive Pong from master.")
-		os.Exit(1)
-	}
-	if string(buf[:n]) == "+PONG\r\n" {
-		conn.Write([]byte(fmt.Sprintf("*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n%s\r\n", *port)))
-	} else {
-		println("Master did not respond")
-		os.Exit(1)
-	}
-
-	buf = make([]byte, 1024)
-	n, err = conn.Read(buf)
-	if err != nil {
-		println("Did not receive OK from master.")
-		os.Exit(1)
-	}
-
-	if string(buf[:n]) == "+OK\r\n" {
-		conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"))
-	}
-
-	buf = make([]byte, 1024)
-	_, err = conn.Read(buf)
-	if err != nil {
-		println("Did not receive OK from master.")
-		os.Exit(1)
-	}
-
-	conn.Write([]byte("*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"))
-	buf = make([]byte, 1024)
-	_, err = conn.Read(buf)
-	if err != nil {
-		println("Did not receive FULLRESYNC from master.")
-		os.Exit(1)
-	}
-}
-
 func main() {
-	initParsers()
+	InitParsers()
 	flag.Parse()
 	if *replication != "" {
-		go setupReplica()
+		go SetupReplica()
 	}
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *port))
@@ -272,7 +160,7 @@ func handleConnection(conn net.Conn) {
 		}
 
 		request := string(buf[:n])
-		result, _ := parseElement(request)
+		result, _ := ParseElement(request)
 
 		if result.Type == ARRAY {
 			query := result.Array // e.g. ["ECHO", "hey"]
