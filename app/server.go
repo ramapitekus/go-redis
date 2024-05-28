@@ -16,6 +16,7 @@ const (
 const replicationId = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
 const NOT_FOUND = "$-1\r\n"
 
+
 var infoMap = map[string]string{
 	"replication": fmt.Sprintf("$89\r\nrole:master\r\nmaster_replid:%s\r\nmaster_repl_offset:0\r\n", replicationId),
 }
@@ -50,10 +51,15 @@ func (element RedisElement) ToString() string {
 }
 
 func main() {
+	serverInfo := GetServerInfo()
 	InitParsers()
 	flag.Parse()
+
 	if *replication != "" {
+		serverInfo.Master = false
 		go SetupReplica()
+	} else {
+		serverInfo.Master = true
 	}
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%s", *port))
