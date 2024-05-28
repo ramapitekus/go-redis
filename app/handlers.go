@@ -52,7 +52,9 @@ func handleSet(conn net.Conn, command []RedisElement) error {
 		replicaConn.Write([]byte(RedisElement{Type: ARRAY, Array: command}.ToString()))
 	}
 
-	conn.Write([]byte(RedisElement{String: "OK", Type: SIMPLE_STR}.ToString()))
+	if GetServerInfo().Master{ // only sends OK if master since slaves should not send acks
+		conn.Write([]byte(RedisElement{String: "OK", Type: SIMPLE_STR}.ToString()))
+	}
 	return nil
 }
 
