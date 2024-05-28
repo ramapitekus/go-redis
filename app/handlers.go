@@ -72,6 +72,7 @@ func handleGet(conn net.Conn, command []RedisElement) error {
 }
 
 func handleReplconf(conn net.Conn, replConf []RedisElement) error {
+	// TODO: make some sort of config like ServerInfo where all the information incl. replicas will be stored
 	if _, exists := replicaConns[conn]; !exists {
 		replicaConns[conn] = true
 	}
