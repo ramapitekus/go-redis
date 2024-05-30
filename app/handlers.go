@@ -74,7 +74,12 @@ func handleGet(conn net.Conn, command []RedisElement) error {
 }
 
 func handleReplconf(conn net.Conn, replConf []RedisElement) error {
-	// TODO: make some sort of config like ServerInfo where all the information incl. replicas will be stored
+	// expect to receive REPLCONF ACK 0
+	if len(replConf) > 1 {
+		if strings.ToLower(replConf[1].String) == "getack" {
+			conn.Write([]byte("*3\r\n$8\r\nREPLCONF\r\n$3\r\nACK\r\n$1\r\n0\r\n"))
+		}
+	}
 	if _, exists := replicaConns[conn]; !exists {
 		replicaConns[conn] = true
 	}
